@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>チャック — 音声タスクアシスタント</title>
+<meta name="application-name" content="チャック">
+<meta name="apple-mobile-web-app-title" content="チャック">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;600&family=Zen+Old+Mincho:wght@500;700&family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--base:#0b1d2e;--deep:#071422;--ink:#e8f6fb;--mute:#6f8fa6;--cyan:#4fe3f5;--ice:#bfe9f7;--line:rgba(79,227,245,.18)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;color:var(--ink);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-family:"Noto Sans JP",system-ui,sans-serif;overflow:hidden;background:radial-gradient(120% 80% at 50% 35%,#12304a 0%,var(--base) 45%,var(--deep) 100%)}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(191,233,247,.035) 0 1px,transparent 1px 3px);animation:flick 6s steps(60) infinite}
+html,body{overscroll-behavior:none;touch-action:manipulation}
+input{touch-action:manipulation}
+@keyframes in{to{opacity:1;transform:none}}
+@keyframes blink{50%{opacity:0}}
+@keyframes pulse{to{box-shadow:0 0 0 14px rgba(79,227,245,0)}}
+
+#boot{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;padding:28px;max-width:560px;margin:auto;font-size:14px;letter-spacing:.04em;transition:opacity .9s,filter .9s}
+#boot .line{opacity:0;transform:translateX(-6px);animation:in .4s forwards;margin-bottom:6px;font-family:"Noto Sans JP"}
+.bar{height:2px;margin-top:18px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--cyan);box-shadow:0 0 12px var(--cyan);transition:width .4s}
+.hide{opacity:0;filter:blur(8px);pointer-events:none}
+
+#app{position:fixed;inset:0 0 auto 0;height:var(--h,100dvh);display:grid;grid-template-rows:auto 1fr auto;max-width:520px;margin:auto;padding:max(16px,env(safe-area-inset-top)) 18px max(14px,env(safe-area-inset-bottom));opacity:0;transform:scale(1.03);filter:blur(6px);transition:opacity 1s,transform 1.2s cubic-bezier(.2,.7,.2,1),filter 1s}
+#app.on{opacity:1;transform:none;filter:none}
+#app.collapse{opacity:0;transform:scaleY(.004);transition:transform .7s cubic-bezier(.7,0,.8,.2),opacity .5s .3s}
+header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:10px}
+.mark{font-family:"Zen Old Mincho",serif;font-weight:700;font-size:22px;letter-spacing:.12em;color:var(--ice)}
+.mark small{font-family:"Zen Old Mincho",serif;font-size:12px;font-weight:500;color:var(--mute);letter-spacing:.1em;margin-left:10px}
+#clock{font-family:Orbitron;font-size:12px;color:var(--mute)}
+.core{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0}
+canvas{width:min(62vw,260px);height:min(62vw,260px);max-height:36vh;max-width:36vh}
+#state{font-family:Orbitron;font-size:12px;letter-spacing:.3em;color:var(--cyan);margin-top:4px;min-height:1em}
+#log{overflow-y:auto;padding:8px 2px;display:flex;flex-direction:column;gap:12px;scrollbar-width:none;mask-image:linear-gradient(transparent,#000 14%)}
+.msg{max-width:88%;line-height:1.75;font-size:15px;opacity:0;transform:translateY(6px);animation:in .5s forwards;white-space:pre-line}
+.me{align-self:flex-end;color:var(--ice);background:rgba(79,227,245,.08);border:1px solid var(--line);padding:8px 12px;border-radius:14px 14px 4px 14px}
+.ai{padding-left:14px;border-left:1px solid var(--cyan)}
+.caret::after{content:"▍";color:var(--cyan);animation:blink 1s steps(2) infinite}
+.stamp{display:inline-grid;place-items:center;width:32px;height:32px;margin-top:8px;border-radius:50%;background:rgba(79,227,245,.12);color:var(--cyan);opacity:0;transform:scale(.4);transition:.4s cubic-bezier(.2,.8,.3,1.4)}
+.stamp path{stroke-dasharray:30;stroke-dashoffset:30;transition:stroke-dashoffset .5s .2s}
+.stamp.show{opacity:1;transform:scale(1)}
+.stamp.show path{stroke-dashoffset:0}
+
+form{display:flex;gap:8px;align-items:center}
+form[hidden]{display:none}
+.dock{display:grid;gap:10px;padding-top:12px;border-top:1px solid var(--line)}
+.sub{display:flex;gap:8px;justify-content:space-between}
+.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);font-size:13px;padding:8px 14px}
+[aria-pressed="true"]{color:var(--cyan);border-color:var(--cyan)}
+#start{align-self:center;margin-bottom:24px;background:transparent;color:var(--cyan);border:1px solid var(--cyan);font-family:Orbitron;letter-spacing:.2em;font-size:13px;padding:14px 26px}
+#start:empty{display:none}
+input{-webkit-user-select:text;user-select:text;flex:1;min-width:0;background:transparent;border:1px solid var(--line);border-radius:999px;color:var(--ink);padding:12px 16px;font:inherit;font-size:16px;outline:none}
+input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(79,227,245,.15)}
+button{font:inherit;color:var(--deep);background:var(--cyan);border:0;border-radius:999px;padding:12px 16px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--ice);outline-offset:3px}
+#mic{width:100%;padding:18px 16px;font-family:Orbitron;font-size:14px;letter-spacing:.2em;background:transparent;color:var(--cyan);border:1px solid var(--cyan)}
+#mic:disabled{opacity:.35}
+#mic,#talk,#kbd{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#mic *{pointer-events:none}
+#mic.live{background:var(--cyan);color:var(--deep);animation:pulse 1.2s infinite}
+
+#off{position:fixed;inset:0;display:none;place-items:center;background:#02060b;z-index:9;text-align:center}
+#off.on{display:grid;animation:in .8s forwards}
+#off p{font-family:Orbitron;letter-spacing:.3em;font-size:12px;color:var(--mute);margin-bottom:16px}
+#off button{background:transparent;color:var(--cyan);border:1px solid var(--line);font-family:Orbitron;letter-spacing:.2em;font-size:12px}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<div id="boot"><div id="bootlines"></div><div class="bar"><i id="prog"></i></div></div>
+
+<div id="app">
+  <header><div class="mark">チャック<small>音声タスクアシスタント</small></div><div id="clock">--:--</div></header>
+  <section class="core"><canvas id="c"></canvas><div id="state">OFFLINE</div></section>
+  <div id="log" aria-live="polite"></div>
+  <div class="dock">
+    <button type="button" id="mic" aria-label="話しかける">● 話しかける</button>
+    <div class="sub">
+      <button type="button" id="talk" class="ghost" aria-pressed="false">会話を続ける: オフ</button>
+      <button type="button" id="kbd" class="ghost">⌨ 文字で入力</button>
+    </div>
+    <form id="form" autocomplete="off" hidden>
+      <input id="in" placeholder="指示を入力" enterkeyhint="send">
+      <button>送信</button>
+    </form>
+  </div>
+</div>
+
+<div id="off"><div><p>システム停止中</p><button id="on">再起動</button></div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- Arc reactor renderer ---------- */
+const cv = $('#c'), g = cv.getContext('2d');
+const dpr = Math.min(devicePixelRatio || 1, 2);
+let W = 0, H = 0;
+function fit(){
+  const r = cv.getBoundingClientRect();
+  cv.width = r.width * dpr; cv.height = r.height * dpr;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); W = r.width; H = r.height;
+}
+addEventListener('resize', fit);
+
+const MODE = {
+  off:      {glow:0,   spin:0,   pulse:0,   k:0},
+  boot:     {glow:.6,  spin:1.6, pulse:.2,  k:1},
+  idle:     {glow:.7,  spin:.35, pulse:.15, k:1},
+  listen:   {glow:1,   spin:1.4, pulse:.5,  k:1},
+  think:    {glow:.9,  spin:3.2, pulse:.25, k:1},
+  speak:    {glow:1,   spin:.7,  pulse:.9,  k:1},
+  shutting: {glow:.25, spin:4.5, pulse:0,   k:0.02}
+};
+let mode = 'off', last = performance.now(), ang = 0;
+const cur = {...MODE.off};
+
+function draw(t){
+  g.clearRect(0, 0, W, H);
+  const cx = W/2, cy = H/2, R = Math.min(W, H) * .42;
+  const beat = 1 + Math.sin(t*6)*cur.pulse*.05 + (mode==='speak' ? Math.abs(Math.sin(t*14))*.06*cur.pulse : 0);
+
+  const gr = g.createRadialGradient(cx, cy, R*.1, cx, cy, R*1.5);
+  gr.addColorStop(0, `rgba(79,227,245,${.32*cur.glow})`);
+  gr.addColorStop(1, 'rgba(79,227,245,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+
+  g.save(); g.translate(cx, cy); g.scale(1, Math.max(.02, cur.k));
+  g.lineCap = 'round';
+  for(let i = 0; i < 4; i++){
+    const r = R*(.42 + i*.16)*beat, dir = i%2 ? -1 : 1, a0 = ang*dir*(1 + i*.4);
+    const seg = [.9, .4, .6, .25][i];
+    g.strokeStyle = `rgba(191,233,247,${(.22 + .5*cur.glow)*(1 - i*.12)})`;
+    g.lineWidth = i===0 ? 2.5 : 1.2;
+    for(let s = 0; s < 2; s++){
+      g.beginPath(); g.arc(0, 0, r, a0 + s*Math.PI, a0 + s*Math.PI + Math.PI*seg); g.stroke();
+    }
+  }
+  g.strokeStyle = `rgba(79,227,245,${.5*cur.glow})`; g.lineWidth = 1;
+  for(let i = 0; i < 36; i++){
+    const a = i*Math.PI/18 + ang*.2, o = i%3 ? 1.05 : 1.1;
+    g.beginPath();
+    g.moveTo(Math.cos(a)*R*1.02, Math.sin(a)*R*1.02);
+    g.lineTo(Math.cos(a)*R*o, Math.sin(a)*R*o);
+    g.stroke();
+  }
+  const core = R*.36*beat;
+  const cg = g.createRadialGradient(0, 0, 0, 0, 0, core);
+  cg.addColorStop(0, `rgba(255,255,255,${.95*cur.glow})`);
+  cg.addColorStop(.4, `rgba(79,227,245,${.9*cur.glow})`);
+  cg.addColorStop(1, 'rgba(79,227,245,0)');
+  g.fillStyle = cg; g.beginPath(); g.arc(0, 0, core, 0, Math.PI*2); g.fill();
+  g.restore();
+}
+function frame(now){
+  const dt = Math.min(.05, (now - last)/1000); last = now;
+  const tgt = MODE[mode];
+  for(const k in tgt) cur[k] += (tgt[k] - cur[k]) * Math.min(1, dt*3);
+  ang += dt * cur.spin * 1.6;
+  draw(now/1000);
+  requestAnimationFrame(frame);
+}
+
+const LABEL = {off:'OFFLINE', boot:'BOOTING', idle:'STANDBY', listen:'LISTENING', think:'PROCESSING', speak:'RESPONDING', shutting:'SHUTTING DOWN'};
+function setMode(m){ mode = m; $('#state').textContent = LABEL[m]; }
+
+/* ---------- Chat log ---------- */
+const log = $('#log');
+function bubble(cls, text){
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls; d.textContent = text;
+  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+}
+const FEMALE_JA = /Kyoko|Nanami|Haruka|O-?Ren|Sayaka|Google 日本語|Female|女性/i;
+function pickVoice(){
+  const all = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
+  return all.find(v => FEMALE_JA.test(v.name)) || all[0] || null;
+}
+function speak(t){
+  return new Promise(res => {
+    if(!('speechSynthesis' in window)) return res();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t.replace(/\n/g, '。'));
+    u.lang = 'ja-JP'; u.rate = 1.0; u.pitch = 1.1;
+    const v = pickVoice(); if(v) u.voice = v;
+    u.onstart = () => { heard = true; }; u.onend = res; u.onerror = res;
+    setTimeout(res, 25000);
+    speechSynthesis.speak(u);
+  });
+}
+async function reply(text, opts = {}){
+  if(mode === 'shutting' || mode === 'off') return;
+  setMode('speak');
+  const d = bubble('ai', ''); d.classList.add('caret');
+  const spoken = speak(text);
+  for(const ch of text){
+    d.textContent += ch; log.scrollTop = log.scrollHeight;
+    await sleep(ch === '\n' ? 80 : 22);
+  }
+  d.classList.remove('caret');
+  await spoken;
+  if(opts.stamp){
+    const s = document.createElement('span');
+    s.className = 'stamp'; s.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'; d.appendChild(s);
+    requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add('show')));
+  }
+  await sleep(200);
+  if(mode === 'speak') setMode('idle');
+}
+
+/* ---------- Task brain (local rules; swap in an AI API here) ---------- */
+const tasks = [], memos = [];
+async function brain(s){
+  const n = s.replace(/\s+/g, '');
+  let m;
+  if(/おはよう|こんにちは|こんばんは/.test(n)) return {text:'こんにちは。本日も準備は整っています。ご用件をどうぞ。'};
+  if(/ありがとう/.test(n)) return {text:'どういたしまして。ほかにもお手伝いできることはありますか。'};
+  if(/^(時刻|今何時|時間|時計)/.test(n)){
+    const d = new Date();
+    return {text:`現在は ${d.getHours()}時${String(d.getMinutes()).padStart(2,'0')}分です。`};
+  }
+  if(m = n.match(/タイマー(\d+)分/)){
+    const min = +m[1];
+    setTimeout(() => reply(`${min}分が経過しました。`), min*60000);
+    return {text:`${min}分のタイマーを設定しました。`, stamp:'済'};
+  }
+  if(m = s.match(/^(計算)?\s*([\d+\-*/().×÷\s]+)$/)){
+    const expr = m[2].replace(/×/g, '*').replace(/÷/g, '/');
+    if(/\d/.test(expr)){
+      try{ const v = Function('"use strict";return (' + expr + ')')(); return {text:`答えは ${Number(v.toFixed(6))} です。`}; }
+      catch(_){}
+    }
+  }
+  if(m = s.match(/^メモ[:：\s]*(.+)/)){
+    memos.push(m[1]); return {text:`メモを保存しました。（${memos.length}件）`, stamp:'済'};
+  }
+  if(/^メモ(一覧|見せて|確認)/.test(n)){
+    return {text: memos.length ? memos.map((x,i) => `${i+1}. ${x}`).join('\n') : 'メモはまだありません。'};
+  }
+  if(m = s.match(/^タスク追加[:：\s]*(.+)/)){
+    tasks.push({t:m[1], done:false}); return {text:'タスクを追加しました。', stamp:'済'};
+  }
+  if(/^タスク(一覧|確認)/.test(n)){
+    return {text: tasks.length ? tasks.map((x,i) => `${i+1}. ${x.done ? '[完了] ' : ''}${x.t}`).join('\n') : '登録中のタスクはありません。'};
+  }
+  if(m = n.match(/^タスク(\d+)完了/)){
+    const x = tasks[+m[1]-1];
+    if(!x) return {text:'そのタスク番号は見つかりません。'};
+    x.done = true; return {text:`「${x.t}」を完了にしました。`, stamp:'済'};
+  }
+  if(/ステータス|状態|システム/.test(n)){
+    const open = tasks.filter(x => !x.done).length, load = 20 + Math.floor(Math.random()*40);
+    return {text:`コア出力は安定しています。CPU負荷 ${load}%、未完了タスク ${open}件、メモ ${memos.length}件です。全システム正常です。`};
+  }
+  if(/スキャン|解析/.test(n)){
+    await sleep(1800); return {text:'周辺スキャンが完了しました。異常は検出されていません。'};
+  }
+  if(/できること|ヘルプ|一覧|使い方/.test(n)){
+    return {text:'対応している指示は次のとおりです。\n時刻を教えて\nタイマー5分\n計算 12*8\nメモ 牛乳を買う\nタスク追加 資料を作る\nタスク一覧\nタスク1完了\nステータス\nスキャン\nシャットダウン'};
+  }
+  if(/シャットダウン|終了|おやすみ|落として/.test(n)){
+    return {shutdown:true, text:'了解しました。システムを終了します。'};
+  }
+  return {text:'その指示はまだ理解できません。「できること」と入力すると、対応している指示を表示します。'};
+}
+
+/* ---------- Input handling ---------- */
+let busy = false;
+async function handle(raw){
+  if(busy || mode === 'off' || mode === 'shutting') return;
+  busy = true;
+  bubble('me', raw);
+  setMode('think');
+  await sleep(450 + Math.random()*300);
+  const r = await brain(raw.trim());
+  if(r.shutdown){ busy = false; return shutdown(); }
+  await reply(r.text, {stamp:r.stamp});
+  busy = false;
+  if(talkOn && mode === 'idle') listen();
+}
+
+let rec = null;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if(SR){
+  rec = new SR();
+  rec.lang = 'ja-JP'; rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onresult = e => { const t = e.results[0][0].transcript; handle(t); };
+  rec.onend = () => {
+    $('#mic').classList.remove('live');
+    if(mode === 'listen'){ setMode('idle'); if(talkOn && !busy) listen(); }
+  };
+  rec.onerror = () => { $('#mic').classList.remove('live'); if(mode === 'listen') setMode('idle'); };
+} else {
+  $('#mic').disabled = true; $('#mic').title = 'このブラウザは音声入力に非対応です';
+}
+let talkOn = false;
+function listen(){
+  if(!rec || busy || mode === 'off' || mode === 'shutting') return;
+  $('#mic').classList.add('live'); setMode('listen');
+  try { rec.start(); } catch(_) {}
+}
+$('#mic').addEventListener('contextmenu', e => e.preventDefault());
+$('#mic').addEventListener('selectstart', e => e.preventDefault());
+$('#mic').onclick = () => {
+  if(!rec) return;
+  if(mode === 'listen'){ rec.stop(); return; }
+  speechSynthesis && speechSynthesis.cancel();
+  listen();
+};
+$('#talk').onclick = () => {
+  talkOn = !talkOn;
+  $('#talk').setAttribute('aria-pressed', talkOn);
+  $('#talk').textContent = '会話を続ける: ' + (talkOn ? 'オン' : 'オフ');
+  if(talkOn && mode === 'idle') listen();
+};
+$('#kbd').onclick = () => { const f = $('#form'); f.hidden = !f.hidden; if(!f.hidden) $('#in').focus(); };
+$('#form').onsubmit = e => {
+  e.preventDefault();
+  const v = $('#in').value.trim();
+  if(!v) return;
+  $('#in').value = ''; handle(v);
+};
+
+/* ---------- Shutdown / power-on ---------- */
+async function shutdown(){
+  setMode('shutting');
+  await sleep(1400);
+  $('#app').classList.add('collapse');
+  await sleep(800);
+  $('#off').classList.add('on');
+}
+$('#on').onclick = async () => {
+  $('#off').classList.remove('on');
+  $('#app').classList.remove('collapse');
+  log.innerHTML = ''; fit();
+  setMode('boot');
+  await sleep(1000);
+  setMode('idle');
+  reply('再起動しました。ご用件をどうぞ。');
+};
+
+/* ---------- Startup sequence ---------- */
+const BOOT_LINES = [
+  'チャック v3.2 を起動しています',
+  'コアリアクター 出力安定',
+  '音声モジュール 確認',
+  'タスクエンジン 同期',
+  '神経インターフェース 接続',
+  '全システム 正常。おかえりなさい'
+];
+async function boot(){
+  setMode('boot');
+  const box = $('#bootlines');
+  for(let i = 0; i < BOOT_LINES.length; i++){
+    const d = document.createElement('div');
+    d.className = 'line';
+    d.textContent = `[${String(i+1).padStart(2,'0')}] ${BOOT_LINES[i]}`;
+    box.appendChild(d);
+    $('#prog').style.width = ((i+1)/BOOT_LINES.length*100) + '%';
+    await sleep(480);
+  }
+  await sleep(400);
+  $('#boot').classList.add('hide');
+  $('#app').classList.add('on');
+  fit();
+  setMode('idle');
+  reply('チャックです。ご用件をどうぞ。話しかけてください。');
+}
+
+setInterval(() => { const d = new Date(); $('#clock').textContent = d.toTimeString().slice(0, 5); }, 1000);
+$('#clock').textContent = new Date().toTimeString().slice(0, 5);
+document.documentElement.style.setProperty('--h', innerHeight + 'px');
+window.addEventListener('scroll', () => window.scrollTo(0, 0));
+$('#in').addEventListener('focus', () => { window.scrollTo(0, 0); });
+fit();
+requestAnimationFrame(frame);
+let heard = false;
+addEventListener('pointerdown', () => { if(!heard) speak('おかえりなさい。'); }, {once:true});
+setMode('boot');
+reply('おかえりなさい。');
+boot();
+</script>
+</body>
+</html>
